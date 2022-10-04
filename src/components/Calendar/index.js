@@ -25,7 +25,7 @@ const palette = [
 // having some sort of a cors problem which is stopping me from being able to POST
 // but http://lucy-calendar.link should work now!
 
-const APIBaseURL = `https://api.lucy-calendar.link`;
+const APIBaseURL = `https://lucy-calendar-backend.herokuapp.com`;
 
 export default () => {
 	const location = useLocation();
