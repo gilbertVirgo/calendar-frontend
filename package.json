@@ -9,12 +9,14 @@
     "color-scheme": "^1.0.1",
     "lodash.chunk": "^4.2.0",
     "luxon": "^3.0.3",
+    "moment": "^2.29.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^5.3.3",
     "react-scripts": "5.0.1",
     "styled-components": "^5.3.5",
     "styled-components-breakpoints": "^1.1.1",
+    "uniqid": "^5.4.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

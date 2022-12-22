@@ -9,8 +9,11 @@ import {
 } from "./styles";
 import { Link, useLocation, useParams } from "react-router-dom";
 
+import APIBaseURL from "../../APIBaseURL";
 import { DateTime } from "luxon";
+import Day from "../../scripts/Day";
 import React from "react";
+import moment from "moment";
 
 const palette = [
 	"#FF9AA2",
@@ -22,110 +25,73 @@ const palette = [
 	"#FF99DD",
 ];
 
-// having some sort of a cors problem which is stopping me from being able to POST
-// but http://lucy-calendar.link should work now!
-
-const APIBaseURL = `https://lucy-calendar-backend.herokuapp.com`;
-
 export default () => {
 	const location = useLocation();
 
-	const [mutableData, setMutableData] = React.useState();
+	const [data, setData] = React.useState();
 	const [isLoading, setIsLoading] = React.useState(true);
 	const { year, month } = useParams();
 
+	const getData = async () => {
+		const response = await fetch(`${APIBaseURL}/${year}/${month}`);
+		const json = await response.json();
+
+		if (!json.success) throw new Error("Server error", json.message);
+
+		return json;
+	};
+
 	React.useEffect(() => {
-		(async function () {
-			const response = await fetch(
-				`${APIBaseURL}/calendar/${year}/${month}`
-			);
-			const json = await response.json();
-
-			if (!json.success) throw new Error("Server error", json.message);
-
-			setMutableData(JSON.parse(json.data));
+		getData().then(({ data }) => {
+			setData(data);
 			setIsLoading(false);
-		})();
+		});
 	}, [location]);
 
 	React.useEffect(() => {
-		(async function () {
-			if (!isLoading) {
-				const response = await fetch(
-					`${APIBaseURL}/calendar/${year}/${month}`,
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ data: mutableData }),
-					}
-				);
-				const json = await response.json();
+		if (isLoading)
+			getData().then(({ data }) => {
+				setData(data);
+				setIsLoading(false);
+			});
+	}, [isLoading]);
 
-				if (!json.success)
-					throw new Error("Server error", json.message);
-			}
-		})();
-	}, [mutableData]);
-
-	const handleEditEvent = ({ day, eventIndex }) => {
-		const title = window.prompt(
-			"Please enter the new title of the event.",
-			day.events[eventIndex].title
-		);
+	const handleEditEvent = async ({ day, eventId }) => {
+		const title = window.prompt("Please enter the new title of the event.");
 
 		if (!title) return;
 
-		let mutableDataCopy = { ...mutableData },
-			indexOfDay = mutableDataCopy.days.findIndex(
-				(val) => val.day === day.day
-			);
-
-		mutableData.days[indexOfDay].events[eventIndex].title = title;
-
-		setMutableData(mutableDataCopy);
+		await Day({ year, month, day }).changeEvent(eventId).to(title);
+		setIsLoading(true);
 	};
 
-	const handleDeleteEvent = ({ day, eventIndex }) => {
+	const handleDeleteEvent = async ({ day, eventId }) => {
 		if (!window.confirm("Are you sure you want to delete this event?"))
 			return;
 
-		let mutableDataCopy = { ...mutableData },
-			indexOfDay = mutableDataCopy.days.findIndex(
-				(val) => val.day === day.day
-			);
-
-		mutableData.days[indexOfDay].events.splice(eventIndex, 1);
-
-		setMutableData(mutableDataCopy);
+		await Day({ year, month, day }).removeEvent(eventId);
+		setIsLoading(true);
 	};
 
-	const handleNewEvent = (day) => {
+	const handleNewEvent = async (day) => {
 		const title = window.prompt("Please enter the title of the event.");
 
 		if (!title) return;
 
-		let mutableDataCopy = { ...mutableData },
-			indexOfDay = mutableDataCopy.days.findIndex(
-				(val) => val.day === day
-			);
-
-		mutableData.days[indexOfDay].events.push({
-			title,
-		});
-
-		setMutableData(mutableDataCopy);
+		await Day({ year, month, day }).addEvent(title);
+		setIsLoading(true);
 	};
 
-	const renderEvents = (day, dayIndex) =>
-		day.events.map((event, eventIndex) => (
+	const renderEvents = ({ day, events }, dayIndex) =>
+		events.map((event, eventIndex) => (
 			<Event
-				onClick={() => handleEditEvent({ day, eventIndex })}
+				onClick={() => handleEditEvent({ day, eventId: event.id })}
 				color={palette[(dayIndex + eventIndex) % palette.length]}
 			>
 				<DeleteEventCapture
-					onClick={(event) => {
-						event.stopPropagation();
-						handleDeleteEvent({ day, eventIndex });
+					onClick={(e) => {
+						e.stopPropagation();
+						handleDeleteEvent({ day, eventId: event.id });
 					}}
 				/>
 				{event.title}
@@ -134,23 +100,25 @@ export default () => {
 
 	const renderDay = (day, index) => (
 		<Cell.Wrapper disabled={!day}>
-			<Cell.Number>{day.day}</Cell.Number>
-			<Cell.Body>
-				{day && renderEvents(day, index)}
+			{day && (
+				<React.Fragment>
+					<Cell.Number>{day.day}</Cell.Number>
+					<Cell.Body>
+						{day.events &&
+							renderEvents(
+								{ day: day.day, events: day.events },
+								index
+							)}
 
-				{/* I don't love `day.day`. Should probably change the structure of this on the backend. */}
-				<NewEventCapture onClick={() => handleNewEvent(day.day)} />
-			</Cell.Body>
+						{/* I don't love `day.day`. Should probably change the structure of this on the backend. */}
+						<NewEventCapture
+							onClick={() => handleNewEvent(day.day)}
+						/>
+					</Cell.Body>
+				</React.Fragment>
+			)}
 		</Cell.Wrapper>
 	);
-
-	if (
-		mutableData &&
-		(!mutableData.hasOwnProperty("days") ||
-			!(typeof mutableData.days === "object"))
-	) {
-		throw new Error("Invalid `days` array. Cannot render calendar.");
-	}
 
 	// Need to add month title etc.
 
@@ -164,7 +132,9 @@ export default () => {
 		return `/${dt.year}/${dt.month}`;
 	};
 
-	return mutableData ? (
+	console.log({ data });
+
+	return data ? (
 		<React.Fragment>
 			<Grid>
 				<MonthName>
@@ -183,7 +153,15 @@ export default () => {
 				].map((name) => (
 					<DayName>{name}</DayName>
 				))}
-				{mutableData.days.map(renderDay)}
+				{[
+					...Array(
+						moment(
+							`${month < 10 ? 0 : ""}${month}-01`,
+							"MM-DD"
+						).day()
+					).fill(null),
+					...data,
+				].map(renderDay)}
 			</Grid>
 		</React.Fragment>
 	) : (
