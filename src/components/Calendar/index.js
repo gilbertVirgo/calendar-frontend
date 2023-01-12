@@ -38,11 +38,15 @@ export default () => {
 
 		if (!json.success) throw new Error("Server error", json.message);
 
-		return json;
+		let { data } = json;
+
+		data = data.sort(({ day: a }, { day: b }) => a - b);
+
+		return data;
 	};
 
 	React.useEffect(() => {
-		getData().then(({ data }) => {
+		getData().then((data) => {
 			setData(data);
 			setIsLoading(false);
 		});
@@ -50,7 +54,7 @@ export default () => {
 
 	React.useEffect(() => {
 		if (isLoading)
-			getData().then(({ data }) => {
+			getData().then((data) => {
 				setData(data);
 				setIsLoading(false);
 			});
@@ -132,7 +136,7 @@ export default () => {
 		return `/${dt.year}/${dt.month}`;
 	};
 
-	console.log({ data });
+	console.log(data);
 
 	return data ? (
 		<React.Fragment>
